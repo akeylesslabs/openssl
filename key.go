@@ -86,8 +86,6 @@ type PublicKey interface {
 	BaseType() NID
 
 	evpPKey() *C.EVP_PKEY
-
-	XXX() int
 }
 
 type PrivateKey interface {
@@ -99,6 +97,9 @@ type PrivateKey interface {
 	// MarshalPKCS1PrivateKeyPEM converts the private key to PEM-encoded PKCS1
 	// format
 	MarshalPKCS1PrivateKeyPEM() (pem_block []byte, err error)
+
+	// MarshalPrivateKeyPEM converts the private key to PEM
+	MarshalPrivateKeyPEM()  (pem_block []byte, err error)
 
 	// MarshalPKCS1PrivateKeyDER converts the private key to DER-encoded PKCS1
 	// format
@@ -224,6 +225,22 @@ func (key *pKey) MarshalPKCS1PrivateKeyPEM() (pem_block []byte,
 	// format if one is available for that key type, otherwise it will encode
 	// to a PKCS8 key.
 	if int(C.X_PEM_write_bio_PrivateKey_traditional(bio, key.key, nil, nil,
+		C.int(0), nil, nil)) != 1 {
+		return nil, errors.New("failed dumping private key")
+	}
+
+	return ioutil.ReadAll(asAnyBio(bio))
+}
+
+func (key *pKey) MarshalPrivateKeyPEM() (pem_block []byte,
+	err error) {
+	bio := C.BIO_new(C.BIO_s_mem())
+	if bio == nil {
+		return nil, errors.New("failed to allocate memory BIO")
+	}
+	defer C.BIO_free(bio)
+
+	if int(C.PEM_write_bio_PrivateKey(bio, key.key, nil, nil,
 		C.int(0), nil, nil)) != 1 {
 		return nil, errors.New("failed dumping private key")
 	}
