@@ -174,6 +174,60 @@ func TestGenerateEC(t *testing.T) {
 	}
 }
 
+func TestGeneratePrime256v1ECKey(t *testing.T) {
+	key, err := GeneratePrime256v1ECKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = key.MarshalPKIXPublicKeyPEM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = key.MarshalPKCS1PrivateKeyPEM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = key.MarshalPrivateKeyPEM()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	message := []byte("Hello, world!")
+	sig, err := key.SignPKCS1v15(SHA256_Method, message)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = key.VerifyPKCS1v15(SHA256_Method, message, sig)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestExtractPublicKey(t *testing.T) {
+	key, err := GeneratePrime256v1ECKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	message := []byte("Hello, world!")
+	sig, err := key.SignPKCS1v15(SHA256_Method, message)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pub_key, err := key.ExtractPublicKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = pub_key.VerifyPKCS1v15(SHA256_Method, message, sig)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGenerateEd25519(t *testing.T) {
 	if !ed25519_support {
 		t.SkipNow()
