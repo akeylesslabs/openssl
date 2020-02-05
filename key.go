@@ -115,8 +115,6 @@ type pKey struct {
 
 func (key *pKey) evpPKey() *C.EVP_PKEY { return key.key }
 
-func (key *pKey) XXX() int { return 1 }
-
 func (key *pKey) KeyType() NID {
 	return NID(C.EVP_PKEY_id(key.key))
 }
