@@ -104,6 +104,9 @@ type PrivateKey interface {
 	// MarshalPKCS1PrivateKeyDER converts the private key to DER-encoded PKCS1
 	// format
 	MarshalPKCS1PrivateKeyDER() (der_block []byte, err error)
+
+	// ExtractPublicKey extracts public key from private key
+	ExtractPublicKey() (PublicKey, error)
 }
 
 type pKey struct {
@@ -111,8 +114,6 @@ type pKey struct {
 }
 
 func (key *pKey) evpPKey() *C.EVP_PKEY { return key.key }
-
-func (key *pKey) XXX() int { return 1 }
 
 func (key *pKey) KeyType() NID {
 	return NID(C.EVP_PKEY_id(key.key))
@@ -291,6 +292,14 @@ func (key *pKey) MarshalPKIXPublicKeyDER() (der_block []byte,
 	}
 
 	return ioutil.ReadAll(asAnyBio(bio))
+}
+
+func (key *pKey) ExtractPublicKey() (PublicKey, error)  {
+	pub_der, err := key.MarshalPKIXPublicKeyDER()
+	if err != nil{
+		return nil, err
+	}
+	return LoadPublicKeyFromDER(pub_der)
 }
 
 // LoadPrivateKeyFromPEM loads a private key from a PEM-encoded block.
@@ -496,6 +505,38 @@ func GenerateECKey(curve EllipticCurve) (PrivateKey, error) {
 	runtime.SetFinalizer(p, func(p *pKey) {
 		C.X_EVP_PKEY_free(p.key)
 	})
+	return p, nil
+}
+
+func GeneratePrime256v1ECKey() (PrivateKey, error) {
+	ecctype := C.CString("prime256v1")
+	defer C.free(unsafe.Pointer(ecctype))
+
+	eccgrp := C.OBJ_txt2nid(ecctype)
+	myecc := C.EC_KEY_new_by_curve_name(eccgrp)
+
+	C.EC_KEY_set_asn1_flag(myecc, 1);
+
+	//Create the public/private EC key pair	  
+	if C.EC_KEY_generate_key(myecc) != 1 {
+		return nil, errors.New("failed generating public/private EC key pair")
+	}
+
+	//Converting the EC key into a PKEY structure
+	key := C.EVP_PKEY_new()
+	if key == nil {
+		return nil, errors.New("failed to allocate EVP_PKEY")
+	}
+	
+	if C.X_EVP_PKEY_assign_charp(key, C.EVP_PKEY_EC, (*C.char)(unsafe.Pointer(myecc))) != 1 {
+		C.EVP_PKEY_free(key)
+		return nil, errors.New("fError assigning ECC key to EVP_PKEY structure")
+	}
+
+	p := &pKey{key: key}
+	runtime.SetFinalizer(p, func(p *pKey) {
+		C.EVP_PKEY_free(p.key)
+	})	
 	return p, nil
 }
 
