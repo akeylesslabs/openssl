@@ -30,7 +30,6 @@ func FIPSModeSet(mode bool) error {
 		//required fips mode already set
 		return nil
 	}
-
 	var r C.int
 	if mode {
 		r = C.FIPS_mode_set(1)
