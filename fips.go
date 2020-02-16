@@ -37,3 +37,12 @@ func FIPSModeSet(mode bool) error {
 	}
 	return nil
 }
+
+// FIPSMode returns current state of FIPS 
+func FIPSMode() bool {
+	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
+
+	r := C.FIPS_mode()
+	return r != 0	
+}
