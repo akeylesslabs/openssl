@@ -17,6 +17,8 @@
 
 package openssl
 
+// #cgo CFLAGS: -I/usr/local/ssl/include/
+// #cgo LDFLAGS: -L.  -lssl -lcrypto
 /*
 #include <errno.h>
 #include <openssl/crypto.h>

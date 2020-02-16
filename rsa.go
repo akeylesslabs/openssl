@@ -1,7 +1,7 @@
 package openssl
 
-// #cgo CFLAGS: -I/usr/local/ssl/include
-// #cgo LDFLAGS: -L. -lcrypto -lssl
+// #cgo CFLAGS: -I/usr/local/ssl/include/
+// #cgo LDFLAGS: -L.  -lssl -lcrypto
 // #include "shim.h"
 // #include <openssl/ssl.h>
 // #include <openssl/err.h>
@@ -42,14 +42,7 @@ package openssl
 //     RSA_free(rsa);
 //     return result;
 // }
-// void printLastError()
-// {
-//     char * err = malloc(130);;
-//     ERR_load_crypto_strings();
-//     ERR_error_string(ERR_get_error(), err);
-//     printf("\nPrivate Encrypt failed ERROR: %s\n", err);
-//     free(err);
-// }
+//
 // void getLastError(char* err)
 // {
 //     ERR_load_crypto_strings();

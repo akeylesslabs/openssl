@@ -1,7 +1,7 @@
 package openssl
 
-// #cgo CFLAGS: -I/usr/local/ssl/include
-// #cgo LDFLAGS: -L. -lcrypto -lssl
+// #cgo CFLAGS: -I/usr/local/ssl/include/
+// #cgo LDFLAGS: -L.  -lssl -lcrypto
 /*
 #include "shim.h"
 #include <stdio.h>
