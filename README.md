@@ -1,8 +1,8 @@
 # OpenSSL bindings for Go
 
-Please see http://godoc.org/github.com/spacemonkeygo/openssl for more info
+Please see <http://godoc.org/github.com/spacemonkeygo/openssl> for more info
 
-### License
+## License
 
 Copyright (C) 2017. See AUTHORS.
 
@@ -10,7 +10,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-  http://www.apache.org/licenses/LICENSE-2.0
+  <http://www.apache.org/licenses/LICENSE-2.0>
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,11 +18,30 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 
-### Using on macOS
-1. Install [homebrew](http://brew.sh/)
-2. `$ brew install openssl` or `$ brew install openssl@1.1`
+## OpenSSL version
 
-### Using on Windows
+This package requires OpenSSL 3.
+
+## Using on macOS
+
+1. Install [homebrew](http://brew.sh/)
+2. `$ brew install openssl@3`
+
+## FIPS
+
+FIPS mode uses the OpenSSL 3 FIPS provider. Your OpenSSL installation must include
+the FIPS provider module and its module configuration.
+
+Enable FIPS before creating cryptographic contexts:
+
+```go
+if err := openssl.FIPSModeSet(true); err != nil {
+    return err
+}
+```
+
+## Using on Windows
+
 1. Install [mingw-w64](http://mingw-w64.sourceforge.net/)
 2. Install [pkg-config-lite](http://sourceforge.net/projects/pkgconfiglite)
 3. Build (or install precompiled) openssl for mingw32-w64

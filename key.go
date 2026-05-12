@@ -476,11 +476,11 @@ func GenerateECKey(curve EllipticCurve) (PrivateKey, error) {
 
 	var curveId int
 	switch curve {
-	case 256:
+	case Prime256v1, 256:
 		curveId = 415 //id of NID_X9_62_prime256v1
-	case 384:
+	case Secp384r1, 384:
 		curveId = 715 // NID_secp384r1
-	case 521:
+	case Secp521r1, 521:
 		curveId = 716 //NID_secp521r1
 	}
 	if curveId == 0 {
@@ -555,7 +555,7 @@ func generateECKeyByName(name string) (PrivateKey, error) {
 	return p, nil
 }
 
-//Use this function for generating P-256 curve in FIPS mode (instead of GenerateECKey)
+// Use this function for generating P-256 curve in FIPS mode (instead of GenerateECKey)
 func GeneratePrime256v1ECKey() (PrivateKey, error) {
 	return generateECKeyByName("prime256v1")
 }

@@ -15,26 +15,33 @@
 package openssl
 
 /*
-#include <openssl/ssl.h>
+#include "shim.h"
 */
 import "C"
-import "runtime"
+import (
+	"runtime"
+	"sync"
+)
 
-// FIPSModeSet enables a FIPS 140-2 validated mode of operation.
-// https://wiki.openssl.org/index.php/FIPS_mode_set()
+var fipsMu sync.Mutex
+
+// FIPSModeSet enables or disables OpenSSL 3 FIPS default properties.
+// Enabling FIPS loads the base and fips providers before switching the default
+// library context to FIPS-approved algorithm implementations.
 func FIPSModeSet(mode bool) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	fipsMu.Lock()
+	defer fipsMu.Unlock()
 
 	if mode == FIPSMode() {
-		//required fips mode already set
 		return nil
 	}
 	var r C.int
 	if mode {
-		r = C.FIPS_mode_set(1)
+		r = C.X_FIPS_mode_set(1)
 	} else {
-		r = C.FIPS_mode_set(0)
+		r = C.X_FIPS_mode_set(0)
 	}
 	if r != 1 {
 		return errorFromErrorQueue()
@@ -42,11 +49,11 @@ func FIPSModeSet(mode bool) error {
 	return nil
 }
 
-// FIPSMode returns current state of FIPS 
+// FIPSMode returns whether OpenSSL 3 FIPS default properties are enabled.
 func FIPSMode() bool {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	r := C.FIPS_mode()
-	return r != 0	
+	r := C.X_FIPS_mode()
+	return r != 0
 }

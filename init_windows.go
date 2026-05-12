@@ -12,46 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
 // +build windows
 
 package openssl
-
-/*
-#include <errno.h>
-#include <openssl/crypto.h>
-#include <windows.h>
-
-CRITICAL_SECTION* goopenssl_locks;
-
-int go_init_locks() {
-	int rc = 0;
-	int nlock;
-	int i;
-	int locks_needed = CRYPTO_num_locks();
-
-	goopenssl_locks = (CRITICAL_SECTION*)malloc(
-		sizeof(*goopenssl_locks) * locks_needed);
-	if (!goopenssl_locks) {
-		return ENOMEM;
-	}
-	for (nlock = 0; nlock < locks_needed; ++nlock) {
-		InitializeCriticalSection(&goopenssl_locks[nlock]);
-	}
-
-	return 0;
-}
-
-void go_thread_locking_callback(int mode, int n, const char *file,
-	int line) {
-	if (mode & CRYPTO_LOCK) {
-		EnterCriticalSection(&goopenssl_locks[n]);
-	} else {
-		LeaveCriticalSection(&goopenssl_locks[n]);
-	}
-}
-
-unsigned long go_thread_id_callback(void) {
-    return (unsigned long)GetCurrentThreadId();
-}
-*/
-import "C"

@@ -25,6 +25,7 @@
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/pem.h>
+#include <openssl/provider.h>
 #include <openssl/ssl.h>
 #include <openssl/x509v3.h>
 #include <openssl/ec.h>
@@ -39,6 +40,8 @@
 
 /* shim  methods */
 extern int X_shim_init();
+extern int X_FIPS_mode_set(int mode);
+extern int X_FIPS_mode();
 
 /* Library methods */
 extern void X_OPENSSL_free(void *ref);
@@ -53,11 +56,7 @@ extern const char * X_SSL_get_cipher_name(const SSL *ssl);
 extern int X_SSL_session_reused(SSL *ssl);
 extern int X_SSL_new_index();
 
-extern const SSL_METHOD *X_SSLv23_method();
-extern const SSL_METHOD *X_SSLv3_method();
-extern const SSL_METHOD *X_TLSv1_method();
-extern const SSL_METHOD *X_TLSv1_1_method();
-extern const SSL_METHOD *X_TLSv1_2_method();
+extern const SSL_METHOD *X_TLS_method();
 
 #if defined SSL_CTRL_SET_TLSEXT_HOSTNAME
 extern int sni_cb(SSL *ssl_conn, int *ad, void *arg);
@@ -69,6 +68,8 @@ extern int X_SSL_CTX_new_index();
 extern long X_SSL_CTX_set_options(SSL_CTX* ctx, long options);
 extern long X_SSL_CTX_clear_options(SSL_CTX* ctx, long options);
 extern long X_SSL_CTX_get_options(SSL_CTX* ctx);
+extern int X_SSL_CTX_set_min_proto_version(SSL_CTX* ctx, int version);
+extern int X_SSL_CTX_set_max_proto_version(SSL_CTX* ctx, int version);
 extern long X_SSL_CTX_set_mode(SSL_CTX* ctx, long modes);
 extern long X_SSL_CTX_get_mode(SSL_CTX* ctx);
 extern long X_SSL_CTX_set_session_cache_mode(SSL_CTX* ctx, long modes);

@@ -14,7 +14,13 @@
 
 package openssl
 
-// #include "shim.h"
+/*
+#include "shim.h"
+
+static inline void X_SSL_CTX_set_security_level_go(SSL_CTX *ctx, int level) {
+	SSL_CTX_set_security_level(ctx, level);
+}
+*/
 import "C"
 
 import (
@@ -60,6 +66,7 @@ func newCtx(method *C.SSL_METHOD) (*Ctx, error) {
 	if ctx == nil {
 		return nil, errorFromErrorQueue()
 	}
+	C.X_SSL_CTX_set_security_level_go(ctx, 0)
 	c := &Ctx{ctx: ctx}
 	C.SSL_CTX_set_ex_data(ctx, get_ssl_ctx_idx(), unsafe.Pointer(c))
 	runtime.SetFinalizer(c, func(c *Ctx) {
@@ -84,23 +91,38 @@ const (
 // NewCtxWithVersion creates an SSL context that is specific to the provided
 // SSL version. See http://www.openssl.org/docs/ssl/SSL_CTX_new.html for more.
 func NewCtxWithVersion(version SSLVersion) (*Ctx, error) {
-	var method *C.SSL_METHOD
+	ctx, err := newCtx(C.X_TLS_method())
+	if err != nil {
+		return nil, err
+	}
+
+	var minVersion, maxVersion C.int
 	switch version {
 	case SSLv3:
-		method = C.X_SSLv3_method()
+		minVersion = C.SSL3_VERSION
+		maxVersion = C.SSL3_VERSION
 	case TLSv1:
-		method = C.X_TLSv1_method()
+		minVersion = C.TLS1_VERSION
+		maxVersion = C.TLS1_VERSION
 	case TLSv1_1:
-		method = C.X_TLSv1_1_method()
+		minVersion = C.TLS1_1_VERSION
+		maxVersion = C.TLS1_1_VERSION
 	case TLSv1_2:
-		method = C.X_TLSv1_2_method()
+		minVersion = C.TLS1_2_VERSION
+		maxVersion = C.TLS1_2_VERSION
 	case AnyVersion:
-		method = C.X_SSLv23_method()
-	}
-	if method == nil {
+		return ctx, nil
+	default:
 		return nil, errors.New("unknown ssl/tls version")
 	}
-	return newCtx(method)
+
+	if C.X_SSL_CTX_set_min_proto_version(ctx.ctx, minVersion) != 1 {
+		return nil, errorFromErrorQueue()
+	}
+	if C.X_SSL_CTX_set_max_proto_version(ctx.ctx, maxVersion) != 1 {
+		return nil, errorFromErrorQueue()
+	}
+	return ctx, nil
 }
 
 // NewCtx creates a context that supports any TLS version 1.0 and newer.

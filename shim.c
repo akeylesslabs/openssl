@@ -24,26 +24,23 @@
 #include <openssl/engine.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/provider.h>
 #include <openssl/ssl.h>
 
 #include "_cgo_export.h"
 
-/*
- * Functions defined in other .c files
- */
-extern int go_init_locks();
-extern void go_thread_locking_callback(int, int, const char*, int);
-extern unsigned long go_thread_id_callback();
+#if OPENSSL_VERSION_MAJOR < 3
+#error "github.com/akeylesslabs/openssl now requires OpenSSL 3 or newer"
+#endif
+
+static OSSL_PROVIDER *base_provider = NULL;
+static OSSL_PROVIDER *default_provider = NULL;
+static OSSL_PROVIDER *fips_provider = NULL;
+static OSSL_PROVIDER *legacy_provider = NULL;
+
 static int go_write_bio_puts(BIO *b, const char *str) {
 	return go_write_bio_write(b, (char*)str, (int)strlen(str));
 }
-
-/*
- ************************************************
- * v1.1.1 and later implementation
- ************************************************
- */
-#if OPENSSL_VERSION_NUMBER >= 0x1010100fL
 
 const int X_ED25519_SUPPORT = 1;
 int X_EVP_PKEY_ED25519 = EVP_PKEY_ED25519;
@@ -68,41 +65,6 @@ int X_EVP_DigestVerify(EVP_MD_CTX *ctx, const unsigned char *sigret,
 		size_t siglen, const unsigned char *tbs, size_t tbslen){
 	return EVP_DigestVerify(ctx, sigret, siglen, tbs, tbslen);
 }
-
-#else
-
-const int X_ED25519_SUPPORT = 0;
-int X_EVP_PKEY_ED25519 = EVP_PKEY_NONE;
-
-int X_EVP_DigestSignInit(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx,
-		const EVP_MD *type, ENGINE *e, EVP_PKEY *pkey){
-	return 0;
-}
-
-int X_EVP_DigestSign(EVP_MD_CTX *ctx, unsigned char *sigret,
-		size_t *siglen, const unsigned char *tbs, size_t tbslen) {
-	return 0;
-}
-
-
-int X_EVP_DigestVerifyInit(EVP_MD_CTX *ctx, EVP_PKEY_CTX **pctx,
-		const EVP_MD *type, ENGINE *e, EVP_PKEY *pkey){
-	return 0;
-}
-
-int X_EVP_DigestVerify(EVP_MD_CTX *ctx, const unsigned char *sigret,
-		size_t siglen, const unsigned char *tbs, size_t tbslen){
-	return 0;
-}
-
-#endif
-
-/*
- ************************************************
- * v1.1.X and later implementation
- ************************************************
- */
-#if OPENSSL_VERSION_NUMBER >= 0x1010000fL
 
 void X_BIO_set_data(BIO* bio, void* data) {
 	BIO_set_data(bio, data);
@@ -217,154 +179,12 @@ void X_HMAC_CTX_free(HMAC_CTX *ctx) {
 }
 
 int X_PEM_write_bio_PrivateKey_traditional(BIO *bio, EVP_PKEY *key, const EVP_CIPHER *enc, unsigned char *kstr, int klen, pem_password_cb *cb, void *u) {
-	return PEM_write_bio_PrivateKey_traditional(bio, key, enc, kstr, klen, cb, u);
-}
-
-#endif
-
-/*
- ************************************************
- * v1.0.X implementation
- ************************************************
- */
-#if OPENSSL_VERSION_NUMBER < 0x1010000fL
-
-static int x_bio_create(BIO *b) {
-	b->shutdown = 1;
-	b->init = 1;
-	b->num = -1;
-	b->ptr = NULL;
-	b->flags = 0;
-	return 1;
-}
-
-static int x_bio_free(BIO *b) {
-	return 1;
-}
-
-static BIO_METHOD writeBioMethod = {
-	BIO_TYPE_SOURCE_SINK,
-	"Go Write BIO",
-	(int (*)(BIO *, const char *, int))go_write_bio_write,
-	NULL,
-	go_write_bio_puts,
-	NULL,
-	go_write_bio_ctrl,
-	x_bio_create,
-	x_bio_free,
-	NULL};
-
-static BIO_METHOD* BIO_s_writeBio() { return &writeBioMethod; }
-
-static BIO_METHOD readBioMethod = {
-	BIO_TYPE_SOURCE_SINK,
-	"Go Read BIO",
-	NULL,
-	go_read_bio_read,
-	NULL,
-	NULL,
-	go_read_bio_ctrl,
-	x_bio_create,
-	x_bio_free,
-	NULL};
-
-static BIO_METHOD* BIO_s_readBio() { return &readBioMethod; }
-
-int x_bio_init_methods() {
-	/* statically initialized above */
-	return 0;
-}
-
-void X_BIO_set_data(BIO* bio, void* data) {
-	bio->ptr = data;
-}
-
-void* X_BIO_get_data(BIO* bio) {
-	return bio->ptr;
-}
-
-EVP_MD_CTX* X_EVP_MD_CTX_new() {
-	return EVP_MD_CTX_create();
-}
-
-void X_EVP_MD_CTX_free(EVP_MD_CTX* ctx) {
-	EVP_MD_CTX_destroy(ctx);
-}
-
-int X_X509_add_ref(X509* x509) {
-	CRYPTO_add(&x509->references, 1, CRYPTO_LOCK_X509);
-	return 1;
-}
-
-const ASN1_TIME *X_X509_get0_notBefore(const X509 *x) {
-	return x->cert_info->validity->notBefore;
-}
-
-const ASN1_TIME *X_X509_get0_notAfter(const X509 *x) {
-	return x->cert_info->validity->notAfter;
-}
-
-const EVP_MD *X_EVP_dss() {
-	return EVP_dss();
-}
-
-const EVP_MD *X_EVP_dss1() {
-	return EVP_dss1();
-}
-
-const EVP_MD *X_EVP_sha() {
-	return EVP_sha();
-}
-
-int X_EVP_CIPHER_CTX_encrypting(const EVP_CIPHER_CTX *ctx) {
-	return ctx->encrypt;
-}
-
-HMAC_CTX *X_HMAC_CTX_new(void) {
-	/* v1.1.0 uses a OPENSSL_zalloc to allocate the memory which does not exist
-	 * in previous versions. malloc+memset to get the same behavior */
-	HMAC_CTX *ctx = (HMAC_CTX *)OPENSSL_malloc(sizeof(HMAC_CTX));
-	if (ctx) {
-		memset(ctx, 0, sizeof(HMAC_CTX));
-		HMAC_CTX_init(ctx);
+	if (PEM_write_bio_PrivateKey_traditional(bio, key, enc, kstr, klen, cb, u) == 1) {
+		return 1;
 	}
-	return ctx;
+	ERR_clear_error();
+	return PEM_write_bio_PrivateKey(bio, key, enc, kstr, klen, cb, u);
 }
-
-void X_HMAC_CTX_free(HMAC_CTX *ctx) {
-	if (ctx) {
-		HMAC_CTX_cleanup(ctx);
-		OPENSSL_free(ctx);
-	}
-}
-
-int X_PEM_write_bio_PrivateKey_traditional(BIO *bio, EVP_PKEY *key, const EVP_CIPHER *enc, unsigned char *kstr, int klen, pem_password_cb *cb, void *u) {
-	/* PEM_write_bio_PrivateKey always tries to use the PKCS8 format if it
-	 * is available, instead of using the "traditional" format as stated in the
-	 * OpenSSL man page.
-	 * i2d_PrivateKey should give us the correct DER encoding, so we'll just
-	 * use PEM_ASN1_write_bio directly to write the DER encoding with the correct
-	 * type header. */
-
-	int ppkey_id, pkey_base_id, ppkey_flags;
-	const char *pinfo, *ppem_str;
-	char pem_type_str[80];
-
-	// Lookup the ASN1 method information to get the pem type
-	if (EVP_PKEY_asn1_get0_info(&ppkey_id, &pkey_base_id, &ppkey_flags, &pinfo, &ppem_str, key->ameth) != 1) {
-		return 0;
-	}
-	// Set up the PEM type string
-	if (BIO_snprintf(pem_type_str, 80, "%s PRIVATE KEY", ppem_str) <= 0) {
-		// Failed to write out the pem type string, something is really wrong.
-		return 0;
-	}
-	// Write out everything to the BIO
-	return PEM_ASN1_write_bio((i2d_of_void *)i2d_PrivateKey,
-		pem_type_str, bio, key, enc, kstr, klen, cb, u);
-}
-
-#endif
 
 /*
  ************************************************
@@ -375,19 +195,17 @@ int X_PEM_write_bio_PrivateKey_traditional(BIO *bio, EVP_PKEY *key, const EVP_CI
 int X_shim_init() {
 	int rc = 0;
 
-	OPENSSL_config(NULL);
-	ENGINE_load_builtin_engines();
-	SSL_load_error_strings();
-	SSL_library_init();
-	OpenSSL_add_all_algorithms();
-	//
-	// Set up OPENSSL thread safety callbacks.
-	rc = go_init_locks();
-	if (rc != 0) {
-		return rc;
+	if (OPENSSL_init_ssl(OPENSSL_INIT_LOAD_CONFIG, NULL) != 1) {
+		return 1;
 	}
-	CRYPTO_set_locking_callback(go_thread_locking_callback);
-	CRYPTO_set_id_callback(go_thread_id_callback);
+	if (OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CONFIG, NULL) != 1) {
+		return 2;
+	}
+	default_provider = OSSL_PROVIDER_load(NULL, "default");
+	if (default_provider == NULL) {
+		return 3;
+	}
+	legacy_provider = OSSL_PROVIDER_load(NULL, "legacy");
 
 	rc = x_bio_init_methods();
 	if (rc != 0) {
@@ -395,6 +213,29 @@ int X_shim_init() {
 	}
 
 	return 0;
+}
+
+int X_FIPS_mode_set(int mode) {
+	if (mode) {
+		if (base_provider == NULL) {
+			base_provider = OSSL_PROVIDER_load(NULL, "base");
+			if (base_provider == NULL) {
+				return 0;
+			}
+		}
+		if (fips_provider == NULL) {
+			fips_provider = OSSL_PROVIDER_load(NULL, "fips");
+			if (fips_provider == NULL) {
+				return 0;
+			}
+		}
+		return EVP_default_properties_enable_fips(NULL, 1);
+	}
+	return EVP_default_properties_enable_fips(NULL, 0);
+}
+
+int X_FIPS_mode() {
+	return EVP_default_properties_is_fips_enabled(NULL);
 }
 
 void * X_OPENSSL_malloc(size_t size) {
@@ -439,36 +280,8 @@ int X_SSL_verify_cb(int ok, X509_STORE_CTX* store) {
 	return go_ssl_verify_cb_thunk(p, ok, store);
 }
 
-const SSL_METHOD *X_SSLv23_method() {
-	return SSLv23_method();
-}
-
-const SSL_METHOD *X_SSLv3_method() {
-#ifndef OPENSSL_NO_SSL3_METHOD
-	return SSLv3_method();
-#else
-	return NULL;
-#endif
-}
-
-const SSL_METHOD *X_TLSv1_method() {
-	return TLSv1_method();
-}
-
-const SSL_METHOD *X_TLSv1_1_method() {
-#if defined(TLS1_1_VERSION) && !defined(OPENSSL_SYSNAME_MACOSX)
-	return TLSv1_1_method();
-#else
-	return NULL;
-#endif
-}
-
-const SSL_METHOD *X_TLSv1_2_method() {
-#if defined(TLS1_2_VERSION) && !defined(OPENSSL_SYSNAME_MACOSX)
-	return TLSv1_2_method();
-#else
-	return NULL;
-#endif
+const SSL_METHOD *X_TLS_method() {
+	return TLS_method();
 }
 
 int X_SSL_CTX_new_index() {
@@ -485,6 +298,14 @@ long X_SSL_CTX_clear_options(SSL_CTX* ctx, long options) {
 
 long X_SSL_CTX_get_options(SSL_CTX* ctx) {
 	return SSL_CTX_get_options(ctx);
+}
+
+int X_SSL_CTX_set_min_proto_version(SSL_CTX* ctx, int version) {
+	return SSL_CTX_set_min_proto_version(ctx, version);
+}
+
+int X_SSL_CTX_set_max_proto_version(SSL_CTX* ctx, int version) {
+	return SSL_CTX_set_max_proto_version(ctx, version);
 }
 
 long X_SSL_CTX_set_mode(SSL_CTX* ctx, long modes) {
