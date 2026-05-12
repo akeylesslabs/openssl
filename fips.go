@@ -15,26 +15,58 @@
 package openssl
 
 /*
-#include <openssl/ssl.h>
+#include <openssl/evp.h>
+#include <openssl/provider.h>
+
+static OSSL_PROVIDER *goopenssl_base_provider = NULL;
+static OSSL_PROVIDER *goopenssl_fips_provider = NULL;
+
+static int goopenssl_fips_mode_set(int mode) {
+	if (mode) {
+		if (goopenssl_base_provider == NULL) {
+			goopenssl_base_provider = OSSL_PROVIDER_load(NULL, "base");
+			if (goopenssl_base_provider == NULL) {
+				return 0;
+			}
+		}
+		if (goopenssl_fips_provider == NULL) {
+			goopenssl_fips_provider = OSSL_PROVIDER_load(NULL, "fips");
+			if (goopenssl_fips_provider == NULL) {
+				return 0;
+			}
+		}
+		return EVP_default_properties_enable_fips(NULL, 1);
+	}
+	return EVP_default_properties_enable_fips(NULL, 0);
+}
+
+static int goopenssl_fips_mode(void) {
+	return EVP_default_properties_is_fips_enabled(NULL);
+}
 */
 import "C"
-import "runtime"
+import (
+	"runtime"
+	"sync"
+)
 
-// FIPSModeSet enables a FIPS 140-2 validated mode of operation.
-// https://wiki.openssl.org/index.php/FIPS_mode_set()
+var fipsMu sync.Mutex
+
+// FIPSModeSet enables or disables OpenSSL 3 FIPS default properties.
 func FIPSModeSet(mode bool) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
+	fipsMu.Lock()
+	defer fipsMu.Unlock()
 
 	if mode == FIPSMode() {
-		//required fips mode already set
 		return nil
 	}
 	var r C.int
 	if mode {
-		r = C.FIPS_mode_set(1)
+		r = C.goopenssl_fips_mode_set(1)
 	} else {
-		r = C.FIPS_mode_set(0)
+		r = C.goopenssl_fips_mode_set(0)
 	}
 	if r != 1 {
 		return errorFromErrorQueue()
@@ -42,11 +74,11 @@ func FIPSModeSet(mode bool) error {
 	return nil
 }
 
-// FIPSMode returns current state of FIPS 
+// FIPSMode returns whether OpenSSL 3 FIPS default properties are enabled.
 func FIPSMode() bool {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
-	r := C.FIPS_mode()
-	return r != 0	
+	r := C.goopenssl_fips_mode()
+	return r != 0
 }
