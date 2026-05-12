@@ -1,7 +1,5 @@
 package openssl
 
-// #cgo CFLAGS: -I/usr/local/ssl/include
-// #cgo LDFLAGS: -L/usr/local/lib  -lssl -lcrypto
 // #include "shim.h"
 // #include <openssl/ssl.h>
 // #include <openssl/err.h>
@@ -11,26 +9,30 @@ package openssl
 // int padding = RSA_NO_PADDING; //3
 // RSA * CreatePrivateRSA(char* d_hex, char* n_hex, char* e_hex)
 // {
-//     RSA *rsa= RSA_new();
+//     RSA *rsa = RSA_new();
 //     if(rsa == NULL)
 //     {
 //         printf( "Failed to create RSA");
+//         return NULL;
 //     }
 //
-//     BIGNUM* d = BN_new();
-//     BN_hex2bn(&d, d_hex);
+//     BIGNUM *d = NULL;
+//     BIGNUM *n = NULL;
+//     BIGNUM *e = NULL;
 //
-//     BIGNUM* n = BN_new();
-//	   BN_hex2bn(&n, n_hex);
-//	
-// 	   BIGNUM* e = BN_new();
-//     BN_hex2bn(&e, e_hex);
+//     if (BN_hex2bn(&d, d_hex) == 0 ||
+//         BN_hex2bn(&n, n_hex) == 0 ||
+//         BN_hex2bn(&e, e_hex) == 0 ||
+//         RSA_set0_key(rsa, n, e, d) != 1)
+//     {
+//         BN_free(d);
+//         BN_free(n);
+//         BN_free(e);
+//         RSA_free(rsa);
+//         return NULL;
+//     }
 //
-//     rsa->d = d;
-// 	   rsa->n = n;
-//	   rsa->e = e;
-//
-//     rsa->flags |= RSA_FLAG_NO_BLINDING;    
+//     RSA_set_flags(rsa, RSA_FLAG_NO_BLINDING);
 //
 //     return rsa;
 // }
@@ -38,6 +40,9 @@ package openssl
 // int PrivateDecrypt(char* d_hex, char* n_hex, char* e_hex, unsigned char* enc_data, int data_len, unsigned char *decrypted)
 // {
 //     RSA* rsa = CreatePrivateRSA(d_hex, n_hex, e_hex);
+//     if (rsa == NULL) {
+//         return -1;
+//     }
 //     int  result = RSA_private_decrypt(data_len, enc_data, decrypted, rsa, padding);
 //     RSA_free(rsa);
 //     return result;
@@ -45,15 +50,14 @@ package openssl
 //
 // void getLastError(char* err)
 // {
-//     ERR_load_crypto_strings();
-//     ERR_error_string(ERR_get_error(), err);
+//     ERR_error_string_n(ERR_get_error(), err, 130);
 // }
 import "C"
 
 import (
-	"unsafe"
-	"math/big"	
 	"fmt"
+	"math/big"
+	"unsafe"
 )
 
 func RsaPrivateDecrypt(D *big.Int, N *big.Int, E *big.Int, msg []byte) ([]byte, error) {
@@ -62,18 +66,18 @@ func RsaPrivateDecrypt(D *big.Int, N *big.Int, E *big.Int, msg []byte) ([]byte, 
 
 	cHexD := C.CString(fmt.Sprintf("%X", D))
 	defer C.free(unsafe.Pointer(cHexD))
-	
-	cHexN := C.CString(fmt.Sprintf("%X", N))	
+
+	cHexN := C.CString(fmt.Sprintf("%X", N))
 	defer C.free(unsafe.Pointer(cHexN))
-	
+
 	cHexE := C.CString(fmt.Sprintf("%X", E))
 	defer C.free(unsafe.Pointer(cHexE))
 
-	decrypted := make([]byte, 512) // 512 is the maximum decrypted message length for RSA 4096. 
-	decLen := C.PrivateDecrypt(cHexD, cHexN, cHexE,(*C.byte)(unsafe.Pointer(&msgBytes[0])), C.int(len(msgBytes)), (*C.byte)(unsafe.Pointer(&decrypted[0])))
+	decrypted := make([]byte, 512) // 512 is the maximum decrypted message length for RSA 4096.
+	decLen := C.PrivateDecrypt(cHexD, cHexN, cHexE, (*C.byte)(unsafe.Pointer(&msgBytes[0])), C.int(len(msgBytes)), (*C.byte)(unsafe.Pointer(&decrypted[0])))
 	if decLen == -1 || decLen > 512 {
 		ptr := C.malloc(C.sizeof_char * 130)
-    	defer C.free(unsafe.Pointer(ptr))
+		defer C.free(unsafe.Pointer(ptr))
 		C.getLastError((*C.char)(ptr))
 		return nil, fmt.Errorf("Private decrypt of OpenSSL failed: %s", C.GoString((*C.char)(ptr)))
 	}
