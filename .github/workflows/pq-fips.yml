@@ -1,0 +1,63 @@
+# Runs the post-quantum tests (pq_test.go) against OpenSSL 3.5.8 with the default provider and with the FIPS provider,
+# built the way the Akeyless main repo builds it (tools/go/build_golang.sh, install_openssl_fips).
+name: pq-fips
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  OPENSSL_VERSION: "3.5.8"
+  OPENSSL_SHA256: "a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2"
+  OSSL: /opt/ossl
+
+jobs:
+  pq:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.2"
+
+      - name: Build OpenSSL with the FIPS provider
+        run: |
+          set -euo pipefail
+          curl -fsSL -o openssl.tar.gz \
+            "https://github.com/openssl/openssl/releases/download/openssl-${OPENSSL_VERSION}/openssl-${OPENSSL_VERSION}.tar.gz"
+          echo "${OPENSSL_SHA256}  openssl.tar.gz" | sha256sum -c -
+          tar xzf openssl.tar.gz
+          cd "openssl-${OPENSSL_VERSION}"
+          ./Configure enable-fips --prefix="${OSSL}" --openssldir="${OSSL}" --libdir=lib shared -Wl,-rpath,"${OSSL}/lib"
+          make -j"$(nproc)" >/dev/null
+          sudo make install_sw install_ssldirs install_fips >/dev/null
+          sudo "${OSSL}/bin/openssl" fipsinstall -out "${OSSL}/fips_module.cnf" -module "${OSSL}/lib/ossl-modules/fips.so"
+          sudo cp "${OSSL}/openssl.cnf" "${OSSL}/openssl-fips.cnf"
+          sudo sed -i "s|# .include fipsmodule.cnf|.include ${OSSL}/fips_module.cnf|" "${OSSL}/openssl-fips.cnf"
+          sudo sed -i 's|# fips = fips_sect|fips = fips_sect|' "${OSSL}/openssl-fips.cnf"
+          grep -q "^fips = fips_sect" "${OSSL}/openssl-fips.cnf"
+
+      - name: Test with the default provider
+        run: |
+          export PKG_CONFIG_PATH="${OSSL}/lib/pkgconfig" CGO_CFLAGS="-I${OSSL}/include" \
+            CGO_LDFLAGS="-L${OSSL}/lib -Wl,-rpath,${OSSL}/lib"
+          set -o pipefail
+          go test -count=1 -race -run 'MLDSA|MLKEM|HKDF|PQ' -v . | tee test.out
+          # Fail if pq_test.go dropped out of the build and nothing ran.
+          grep -q -- '--- PASS: TestMLDSAKeyGenACVP' test.out
+
+      # The rest of the package's tests do not pass under the FIPS configuration, so only the PQ tests run here.
+      - name: Test with the FIPS provider
+        run: |
+          export PKG_CONFIG_PATH="${OSSL}/lib/pkgconfig" CGO_CFLAGS="-I${OSSL}/include" \
+            CGO_LDFLAGS="-L${OSSL}/lib -Wl,-rpath,${OSSL}/lib"
+          set -o pipefail
+          OPENSSL_CONF="${OSSL}/openssl-fips.cnf" GOOPENSSL_TEST_FIPS=1 \
+            go test -count=1 -race -run 'MLDSA|MLKEM|HKDF|PQ' -v . | tee test.out
+          grep -q -- '--- PASS: TestMLDSAKeyGenACVP' test.out
+          # Logged only when the FIPS checks ran.
+          grep -q 'FIPS provider holds the key' test.out
