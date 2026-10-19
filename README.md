@@ -2,6 +2,12 @@
 
 Please see http://godoc.org/github.com/spacemonkeygo/openssl for more info
 
+### OpenSSL version
+
+The package needs OpenSSL 3.5 or later: the post-quantum primitives in `pq.go` (ML-DSA, ML-KEM, HKDF extract/expand)
+use EVP APIs that older versions do not have. To run their tests against the FIPS provider, see
+`.github/workflows/pq-fips.yml`.
+
 ### License
 
 Copyright (C) 2017. See AUTHORS.
