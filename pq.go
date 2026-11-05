@@ -579,6 +579,15 @@ func hkdf(md, mode string, key, salt, info []byte, length int) ([]byte, error) {
 	}
 	cMd := C.CString(md)
 	defer C.free(unsafe.Pointer(cMd))
+	// RFC 5869 limits the output to 255 * HashLen bytes; check before allocating it.
+	size := int(C.goopenssl_md_size(cMd))
+	if size <= 0 {
+		C.ERR_clear_error()
+		return nil, fmt.Errorf("unsupported HKDF digest %q", md)
+	}
+	if length > 255*size {
+		return nil, fmt.Errorf("HKDF output length %d exceeds 255 * %d bytes for %s", length, size, md)
+	}
 	cMode := C.CString(mode)
 	defer C.free(unsafe.Pointer(cMode))
 

@@ -34,6 +34,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"math"
 	"os"
 	"strings"
 	"sync"
@@ -514,6 +515,13 @@ func TestHKDFSHA384MatchesGo(t *testing.T) {
 	}
 	if _, err := HKDFExpand("SHA256", randomBytes(t, 32), nil, 255*sha256.Size+1); err == nil {
 		t.Fatal("accepted an output longer than 255 hash lengths")
+	}
+	// Rejected before the output buffer is allocated, so this does not panic or exhaust memory.
+	if _, err := HKDFExpand("SHA256", randomBytes(t, 32), nil, math.MaxInt); err == nil {
+		t.Fatal("accepted a huge output length")
+	}
+	if _, err := HKDFExpand("NO-SUCH-DIGEST", randomBytes(t, 32), nil, 32); err == nil {
+		t.Fatal("accepted an unknown digest for HKDF-Expand")
 	}
 	if _, err := HKDFExtract("NO-SUCH-DIGEST", nil, []byte("ikm")); err == nil {
 		t.Fatal("accepted an unknown digest")
